@@ -5,6 +5,7 @@ services:
       - "1521:1521"
     environment:
       - ORACLE_PWD=Welcome12345!
+      - ADMIN_PASSWORD=Welcome12345!
     volumes:
       - ./db/oracle/init:/opt/oracle/scripts/setup
     healthcheck:

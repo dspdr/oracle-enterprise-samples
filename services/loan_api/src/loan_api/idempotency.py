@@ -33,6 +33,25 @@ class IdempotencyManager:
         
         cursor = self.conn.cursor()
         try:
+            # Enforce key uniqueness across routes
+            cursor.execute(
+                """
+                SELECT route_path, payload_hash, status, response_code, response_body
+                FROM idempotency_keys
+                WHERE idempotency_key = :1
+                """,
+                [key]
+            )
+            any_row = cursor.fetchone()
+            if any_row:
+                any_route, any_hash, any_status, any_code, any_body = any_row
+                if any_route != route or any_hash != phash:
+                    logger.warning(f"Idempotency conflict: Key {key} reused across routes or with different payload.")
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Idempotency key already used for route {any_route}"
+                    )
+
             cursor.execute(
                 """
                 SELECT payload_hash, status, response_code, response_body 

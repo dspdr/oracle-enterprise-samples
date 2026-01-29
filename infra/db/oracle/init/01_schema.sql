@@ -53,3 +53,5 @@ CREATE TABLE loan_user.idempotency_keys (
 );
 
 -- Grant access to tables if needed (user is owner, so explicit grants not needed for self)
+
+EXIT;

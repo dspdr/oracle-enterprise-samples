@@ -13,6 +13,15 @@ echo "=== Oracle Enterprise Sample: Loan Origination Demo ==="
 echo "Container Engine: $CONTAINER_ENGINE"
 echo "API URL: $API_URL"
 
+# Ensure DB schema is initialized (best-effort)
+if $CONTAINER_ENGINE ps --format '{{.Names}}' | grep -q '^infra-db-1$'; then
+    if ! $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "echo \"select username from dba_users where username='LOAN_USER';\" | sqlplus -s / as sysdba" | grep -q "LOAN_USER"; then
+        echo "Initializing DB schema and seed data..."
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "sqlplus -s / as sysdba @/opt/oracle/scripts/setup/01_schema.sql"
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "sqlplus -s / as sysdba @/opt/oracle/scripts/setup/02_seed.sql"
+    fi
+fi
+
 # Wait for API to be ready
 echo "Waiting for API..."
 MAX_RETRIES=30

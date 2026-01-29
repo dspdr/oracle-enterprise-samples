@@ -27,9 +27,23 @@ This sample demonstrates an enterprise-grade loan origination process using Orac
 Detailed documentation is available in the `docs/` directory:
 
 *   [Runbook](docs/runbook.md) - Operational guide for Enterprise Architects.
-*   [Architecture](docs/architecture.mmd) - System diagrams.
-*   [Data Model](docs/data-model.md) - Database schema.
-*   [Agent Specification](docs/agent.md) - Decision logic definition.
+*   [Architecture](docs/runbook.md#deployment-architecture) - System diagrams.
+*   [Data Model](../../infra/db/oracle/init/01_schema.sql) - Database schema.
+*   [Agent Specification](../../services/decision_agent/agent_spec/manifest.yaml) - Decision logic definition.
+
+## Decision Flow Diagram
+
+```mermaid
+flowchart TB
+  A[Application] --> D[LoanDecisionAgent]
+  B[KYC Result] --> D
+  C[Fraud Result] --> D
+  E[Credit Score] --> D
+  D --> F{Decision}
+  F -->|APPROVE| G[Pricing]
+  F -->|REJECT| H[Reason Codes]
+  F -->|REFER| H
+```
 
 ## Directory Structure
 

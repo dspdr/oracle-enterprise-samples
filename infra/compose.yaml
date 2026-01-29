@@ -1,6 +1,6 @@
 services:
   db:
-    image: container-registry.oracle.com/database/free:latest
+    image: ${DB_IMAGE:-container-registry.oracle.com/database/free:latest}
     ports:
       - "1521:1521"
     environment:
@@ -23,10 +23,10 @@ services:
     environment:
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
-      - DB_DSN=db:1521/FREEPDB1
+      - DB_DSN=db:1521/${DB_SERVICE:-FREEPDB1}
       - DB_HOST=db
       - DB_PORT=1521
-      - DB_SERVICE=FREEPDB1
+      - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
     depends_on:
       db:
         condition: service_healthy
@@ -40,6 +40,6 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=1521
-      - DB_SERVICE=FREEPDB1
+      - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!

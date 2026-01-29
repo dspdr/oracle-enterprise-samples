@@ -1,8 +1,22 @@
 -- 01_schema.sql
 -- Create user and tables for Loan Origination Sample
 
--- Switch to PDB
-ALTER SESSION SET CONTAINER = FREEPDB1;
+-- Switch to a writable PDB if present
+DECLARE
+  v_pdb VARCHAR2(128);
+BEGIN
+  SELECT name
+    INTO v_pdb
+    FROM v$pdbs
+   WHERE name NOT IN ('PDB$SEED')
+   ORDER BY name
+   FETCH FIRST 1 ROWS ONLY;
+  EXECUTE IMMEDIATE 'ALTER SESSION SET CONTAINER = ' || v_pdb;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    NULL;
+END;
+/
 
 -- Create User
 -- Drop if exists (optional, but good for reset)

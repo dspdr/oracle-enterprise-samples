@@ -32,6 +32,10 @@ This sample demonstrates an enterprise-grade loan origination process using Orac
   ```bash
   API_URL=http://localhost:8001 ./demo.sh
   ```
+* Override DB image/service:
+  ```bash
+  DB_IMAGE=container-registry.oracle.com/database/free:latest DB_SERVICE=FREEPDB1 ./reset.sh
+  ```
 
 ## Documentation
 

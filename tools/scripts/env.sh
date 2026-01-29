@@ -22,3 +22,28 @@ fi
 
 export API_URL="${API_URL:-http://localhost:8000}"
 export PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd)
+
+# Select DB image based on engine architecture (adb-free supports arm64; database/free is amd64-only)
+ARCH_RAW=""
+if [ "$CONTAINER_ENGINE" = "podman" ]; then
+    ARCH_RAW=$($CONTAINER_ENGINE info --format '{{.Host.Arch}}' 2>/dev/null || true)
+elif [ "$CONTAINER_ENGINE" = "docker" ]; then
+    ARCH_RAW=$($CONTAINER_ENGINE info --format '{{.Architecture}}' 2>/dev/null || true)
+fi
+if [ -z "$ARCH_RAW" ]; then
+    ARCH_RAW=$(uname -m 2>/dev/null || echo unknown)
+fi
+
+case "$ARCH_RAW" in
+    arm64|aarch64)
+        export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}"
+        ;;
+    amd64|x86_64)
+        export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/free:latest}"
+        ;;
+    *)
+        export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/free:latest}"
+        ;;
+esac
+
+export DB_SERVICE="${DB_SERVICE:-FREEPDB1}"

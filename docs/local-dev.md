@@ -44,3 +44,6 @@
 ## Using Podman Instead of Docker
 
 If Podman is running, the scripts use it automatically; otherwise they fall back to Docker.
+
+On ARM64, the scripts automatically use `container-registry.oracle.com/database/adb-free:latest-23ai`
+because `database/free` is amd64-only. You can override with `DB_IMAGE=...` or `DB_SERVICE=...`.

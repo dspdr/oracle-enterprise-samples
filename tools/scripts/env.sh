@@ -12,5 +12,5 @@ else
     exit 1
 fi
 
-export API_URL="http://localhost:8000"
+export API_URL="${API_URL:-http://localhost:8000}"
 export PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd)

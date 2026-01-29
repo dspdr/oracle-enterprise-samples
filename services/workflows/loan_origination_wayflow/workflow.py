@@ -1,8 +1,9 @@
 import os
+import json
 import logging
 from typing import Any, Dict, List
-from services.workflows.wayflow import Wayflow, WorkflowContext, Step
-from services.decision_agent import AgentRunner, LoanDecisionAgent
+from workflows.wayflow import Wayflow, WorkflowContext, Step
+from decision_agent import AgentRunner, LoanDecisionAgent
 
 # Define Tools (Mock or Real Logic)
 def tool_get_application_snapshot(application_id: str):
@@ -94,7 +95,7 @@ def step_persist(ctx: WorkflowContext):
     cursor = db_conn.cursor()
     cursor.execute(
         "UPDATE applications SET status = :1, decision_data = :2, updated_at = CURRENT_TIMESTAMP WHERE id = :3",
-        [decision, str(ctx.state["decision_result"]), app_id]
+        [decision, json.dumps(ctx.state["decision_result"]), app_id]
     )
     # Commit handled by caller or here? 
     # Usually transaction management is outside.

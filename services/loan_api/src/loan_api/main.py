@@ -10,8 +10,8 @@ from .db import init_db, get_connection, close_db, release_connection
 from .models import ApplicationCreate, ApplicationResponse, DecisionResponse, KYCResult, FraudResult, CreditScore, BookingCreate
 from .idempotency import IdempotencyManager
 
-from services.workflows.loan_origination_wayflow import create_loan_workflow
-from services.workflows.wayflow import WorkflowContext
+from workflows.loan_origination_wayflow import create_loan_workflow
+from workflows.wayflow import WorkflowContext
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("loan_api")

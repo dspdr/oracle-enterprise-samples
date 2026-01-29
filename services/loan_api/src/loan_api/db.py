@@ -37,3 +37,11 @@ def close_db():
     if _pool:
         _pool.close()
         _pool = None
+
+def release_connection(conn):
+    if not conn:
+        return
+    try:
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Failed to release connection: {e}")

@@ -16,7 +16,7 @@ WORKDIR /app/services/loan_api
 RUN pip install --no-cache-dir .
 
 # Set PYTHONPATH so 'decision_agent' and 'workflows' are importable
-ENV PYTHONPATH=/app/services
+ENV PYTHONPATH=/app/services:/app/services/decision_agent/src
 
 # Expose port
 EXPOSE 8000

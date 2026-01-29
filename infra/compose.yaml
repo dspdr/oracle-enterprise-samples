@@ -6,6 +6,7 @@ services:
     environment:
       - ORACLE_PWD=Welcome12345!
       - ADMIN_PASSWORD=Welcome12345!
+      - WALLET_PASSWORD=Welcome12345!
     volumes:
       - ./db/oracle/init:/opt/oracle/scripts/setup
     healthcheck:

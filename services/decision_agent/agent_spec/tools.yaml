@@ -1,0 +1,20 @@
+tools:
+  get_application_snapshot:
+    description: "Fetches the full application data including income and debt details."
+    parameters:
+      application_id:
+        type: string
+  evaluate_policy:
+    description: "Evaluates business rules against the application."
+    parameters:
+      policy_name:
+        type: string
+      data:
+        type: object
+  price_offer:
+    description: "Calculates the interest rate and terms."
+    parameters:
+      credit_score:
+        type: integer
+      amount:
+        type: number

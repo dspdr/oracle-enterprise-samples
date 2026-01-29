@@ -1,0 +1,45 @@
+services:
+  db:
+    image: container-registry.oracle.com/database/free:latest
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Welcome12345!
+    volumes:
+      - ./db/oracle/init:/opt/oracle/scripts/setup
+    healthcheck:
+      test: ["CMD", "/opt/oracle/checkDBStatus.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  loan-api:
+    build:
+      context: ..
+      dockerfile: services/loan_api/Containerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_USER=loan_user
+      - DB_PASSWORD=Welcome12345!
+      - DB_DSN=db:1521/FREEPDB1
+      - DB_HOST=db
+      - DB_PORT=1521
+      - DB_SERVICE=FREEPDB1
+    depends_on:
+      db:
+        condition: service_healthy
+
+  agent-factory:
+    image: localhost/oracle-agent-factory:25.3
+    profiles:
+      - agent_factory
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=1521
+      - DB_SERVICE=FREEPDB1
+      - DB_USER=loan_user
+      - DB_PASSWORD=Welcome12345!

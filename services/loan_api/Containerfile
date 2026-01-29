@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies if needed (e.g. for Oracle client if not using thin mode)
+# Thin mode is default for python-oracledb 2.0+ and works for Free DB.
+
+# Copy the services directory
+COPY services/ /app/services/
+
+# Install dependencies for loan_api
+WORKDIR /app/services/loan_api
+# We assume pyproject.toml is present and defines dependencies
+# We also assume it includes dependencies on local packages or we install them manually
+# For this sample, we'll install . and rely on PYTHONPATH for others if not package-deps
+RUN pip install --no-cache-dir .
+
+# Set PYTHONPATH so 'decision_agent' and 'workflows' are importable
+ENV PYTHONPATH=/app/services
+
+# Expose port
+EXPOSE 8000
+
+# Command to run
+CMD ["uvicorn", "loan_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

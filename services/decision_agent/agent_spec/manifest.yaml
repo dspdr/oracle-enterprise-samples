@@ -1,0 +1,33 @@
+name: LoanDecisionAgent
+version: 1.0.0
+description: "Determines loan eligibility and pricing based on application data and risk checks."
+inputs:
+  application:
+    type: object
+    description: "The application snapshot containing applicant details and requested amount."
+  kyc_result:
+    type: object
+    description: "Result of KYC check (Pass/Fail)."
+  fraud_result:
+    type: object
+    description: "Result of Fraud check (Risk Score)."
+  credit_score:
+    type: integer
+    description: "Credit bureau score."
+outputs:
+  decision:
+    type: string
+    description: "Final decision: APPROVE, REJECT, or REFER."
+    enum: [APPROVE, REJECT, REFER]
+  reason_codes:
+    type: array
+    items:
+      type: string
+    description: "List of reasons for the decision."
+  pricing:
+    type: object
+    description: "Suggested pricing (rate, term) if approved."
+tools:
+  - get_application_snapshot
+  - evaluate_policy
+  - price_offer

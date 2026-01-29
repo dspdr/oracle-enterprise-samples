@@ -9,8 +9,13 @@ services:
       - WALLET_PASSWORD=Welcome12345!
     volumes:
       - ./db/oracle/init:/opt/oracle/scripts/setup
+      - adb_wallets:/u01/app/oracle/wallets
     healthcheck:
-      test: ["CMD", "/opt/oracle/checkDBStatus.sh"]
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -x /opt/oracle/checkDBStatus.sh ]; then /opt/oracle/checkDBStatus.sh; else echo \"select 1 from dual;\" | sqlplus -s / as sysdba >/dev/null; fi"
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -25,10 +30,13 @@ services:
     environment:
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
-      - DB_DSN=db:1521/${DB_SERVICE:-FREEPDB1}
+      - DB_DSN=${DB_DSN:-db:1521/${DB_SERVICE:-FREEPDB1}}
+      - TNS_ADMIN=${DB_TNS_ADMIN:-}
       - DB_HOST=db
       - DB_PORT=1521
       - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
+    volumes:
+      - adb_wallets:/u01/app/oracle/wallets:ro
     depends_on:
       db:
         condition: service_healthy
@@ -45,3 +53,6 @@ services:
       - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
+
+volumes:
+  adb_wallets:

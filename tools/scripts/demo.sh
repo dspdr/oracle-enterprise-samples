@@ -15,10 +15,43 @@ echo "API URL: $API_URL"
 
 # Ensure DB schema is initialized (best-effort)
 if $CONTAINER_ENGINE ps --format '{{.Names}}' | grep -q '^infra-db-1$'; then
-    if ! $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "echo \"select username from dba_users where username='LOAN_USER';\" | sqlplus -s / as sysdba" | grep -q "LOAN_USER"; then
+    WALLET_DIR="/u01/app/oracle/wallets/tls_wallet"
+    USE_WALLET=$($CONTAINER_ENGINE exec -i infra-db-1 bash -lc "[ -f $WALLET_DIR/tnsnames.ora ] && echo yes || true" 2>/dev/null | tr -d '\r')
+    if [ "$USE_WALLET" = "yes" ]; then
+        DB_ADMIN_USER="${DB_ADMIN_USER:-admin}"
+        DB_ADMIN_PASSWORD="${DB_ADMIN_PASSWORD:-Welcome12345!}"
+        DB_TNS="${DB_TNS:-myatp_low}"
+        SQLPLUS_ENV="TNS_ADMIN=$WALLET_DIR"
+        SQLPLUS_CONNECT="connect ${DB_ADMIN_USER}/\"${DB_ADMIN_PASSWORD}\"@${DB_TNS};"
+    else
+        DB_SID=$($CONTAINER_ENGINE exec -i infra-db-1 bash -lc "ps -ef | awk '/ora_pmon_/ {sub(/.*ora_pmon_/,\"\",$8); print $8; exit}'" 2>/dev/null | tr -d '\r')
+        if [ -z "$DB_SID" ]; then
+            DB_SID="POD1"
+        fi
+        SQLPLUS_ENV="ORACLE_SID=$DB_SID"
+        SQLPLUS_CONNECT="connect / as sysdba;"
+    fi
+    if ! $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL | grep -q "LOAN_USER"
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+set heading off feedback off;
+select username from dba_users where username='LOAN_USER';
+exit;
+SQL
+    then
         echo "Initializing DB schema and seed data..."
-        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "sqlplus -s / as sysdba @/opt/oracle/scripts/setup/01_schema.sql"
-        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "sqlplus -s / as sysdba @/opt/oracle/scripts/setup/02_seed.sql"
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+@/opt/oracle/scripts/setup/01_schema.sql
+exit;
+SQL
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+@/opt/oracle/scripts/setup/02_seed.sql
+exit;
+SQL
     fi
 fi
 

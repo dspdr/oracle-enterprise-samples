@@ -37,6 +37,9 @@ fi
 case "$ARCH_RAW" in
     arm64|aarch64)
         export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}"
+        export DB_SERVICE="${DB_SERVICE:-myatp_low}"
+        export DB_DSN="${DB_DSN:-myatp_low}"
+        export DB_TNS_ADMIN="${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}"
         ;;
     amd64|x86_64)
         export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/free:latest}"

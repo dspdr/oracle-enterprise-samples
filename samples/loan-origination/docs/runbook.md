@@ -11,16 +11,19 @@ The solution runs as a set of containerized services:
 1.  **Loan API**: The main entry point, hosting the workflow engine and decision agent.
 2.  **Oracle Database**: System of Record, Idempotency Store, and Audit Log.
 
-Default Runtime: **Podman Desktop** (Rootless).
+Default Runtime: **Docker Desktop or Podman Desktop**.
 
 ## Operational Procedures
 
 ### Start-Up
-Run `podman compose up -d` in the `infra/` directory.
+From the sample directory:
+```bash
+./reset.sh
+```
 Wait for the database health check to pass.
 
 ### Reset
-Run `tools/scripts/reset.sh` to wipe data and restart containers.
+Run `./reset.sh` from `samples/loan-origination/` to wipe data and restart containers.
 
 ## Core Mechanisms
 
@@ -50,8 +53,12 @@ The `/applications/{id}/decision/execute` endpoint commits the decision.
 
 ### Database Connectivity
 Check `infra/compose.yaml` healthcheck.
-Ensure `ORACLE_PWD` matches `DB_PASSWORD` in `loan-api`.
+Ensure the schema is initialized (the reset/demo scripts do this automatically).
 
 ### Application Logs
-View logs via `podman compose logs -f loan-api`.
-structured JSON logging is recommended for production (simplified text logging used in sample).
+View logs via:
+```bash
+cd ../../infra
+docker compose logs -f loan-api
+```
+Structured JSON logging is recommended for production (simplified text logging used in sample).

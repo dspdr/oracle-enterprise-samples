@@ -1,15 +1,21 @@
 # Repository Overview
 
-This monorepo contains enterprise-grade samples built on Oracle technology.
+This monorepo contains enterprise-grade samples built on Oracle Database, FastAPI, and deterministic workflow tooling.
 
 ## Structure
 
-*   `infra/`: Infrastructure as Code (Compose files, DB init).
-*   `services/`: Microservices source code.
-    *   `loan_api`: REST API for Loan Origination.
-    *   `decision_agent`: Deterministic Decision Agent.
-    *   `workflows`: Wayflow workflow definitions.
-*   `samples/`: Documentation and client examples for specific business domains.
-    *   `loan-origination/`: The primary sample.
-*   `tools/`: Utility scripts.
-*   `third_party/`: Integrations with external/optional tools (e.g., Agent Factory).
+* `infra/`: Compose stack and Oracle DB init scripts.
+* `services/`: Service implementations.
+  * `loan_api`: REST API for loan origination.
+  * `decision_agent`: Deterministic decision agent.
+  * `workflows`: Wayflow workflow definitions.
+* `samples/`: Sample-specific docs and client scripts.
+  * `loan-origination/`: Primary end-to-end sample.
+* `tools/`: Shared CLI scripts (reset, demo, teardown).
+* `third_party/`: Optional integrations (Agent Factory).
+
+## Navigation
+
+* Root quick start: `README.md`
+* Local dev guide: `docs/local-dev.md`
+* Loan sample: `samples/loan-origination/README.md`

@@ -5,7 +5,7 @@ This directory supports the optional integration of Oracle AI Database Private A
 ## Requirements
 
 *   **Hardware**: Apple Silicon (M1/M2/M3)
-*   **Software**: Podman Desktop (Rootless)
+*   **Software**: Podman Desktop (Rootless). Docker is not supported for this integration.
 *   **Kit**: `applied_ai_arm64.tar.gz` (Must be obtained from Oracle)
 
 ## Installation Instructions

@@ -13,14 +13,25 @@ This sample demonstrates an enterprise-grade loan origination process using Orac
 
 1.  Start the infrastructure:
     ```bash
-    cd ../../infra
-    podman compose up -d
+    ./reset.sh
     ```
 
 2.  Run the demo script:
     ```bash
-    ../../tools/scripts/demo.sh
+    ./demo.sh
     ```
+
+3.  Tear down everything:
+    ```bash
+    ./teardown.sh
+    ```
+
+### Optional Overrides
+
+* Override API URL:
+  ```bash
+  API_URL=http://localhost:8001 ./demo.sh
+  ```
 
 ## Documentation
 
@@ -49,3 +60,5 @@ flowchart TB
 
 *   `payloads/`: JSON payload examples.
 *   `curl/`: Individual scripts for stepping through the API.
+*   `docs/`: Runbook and operational notes.
+*   `demo.sh`, `reset.sh`, `teardown.sh`: Sample-local wrappers for shared scripts.

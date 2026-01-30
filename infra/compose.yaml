@@ -65,5 +65,24 @@ services:
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
 
+  true-cache:
+    image: ${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}
+    profiles:
+      - true_cache
+    ports:
+      - "11523:1521"
+    environment:
+      - ORACLE_PWD=Welcome12345!
+      - ADMIN_PASSWORD=Welcome12345!
+      - WALLET_PASSWORD=Welcome12345!
+    volumes:
+      - ./db/oracle/init:/opt/oracle/scripts/setup
+    healthcheck:
+      test: ["CMD-SHELL", "echo \"select 1 from dual;\" | sqlplus -s / as sysdba >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
 volumes:
   adb_wallets:

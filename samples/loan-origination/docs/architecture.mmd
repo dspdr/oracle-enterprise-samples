@@ -1,0 +1,26 @@
+graph TB
+    Client[Client / Demo Script]
+    
+    subgraph Service Layer
+        API[Loan API]
+    end
+    
+    subgraph Data Layer
+        TC[(True Cache - Read Only)]
+        P[(Primary DB - Read/Write)]
+        
+        TC -.->|Replication| P
+    end
+    
+    subgraph AI Services
+        GenAI[Generative AI / Select AI]
+    end
+    
+    Client -->|POST /plan| API
+    Client -->|POST /execute| API
+    Client -->|GET /audit| API
+    
+    API -->|Reads| TC
+    API -->|Writes| P
+    
+    P -->|Select AI / Synthetic Data| GenAI

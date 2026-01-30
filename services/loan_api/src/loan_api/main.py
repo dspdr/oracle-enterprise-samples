@@ -6,11 +6,12 @@ import json
 import logging
 import datetime
 
-from .db import init_db, get_connection, close_db, release_connection
-from .models import ApplicationCreate, ApplicationResponse, DecisionResponse, KYCResult, FraudResult, CreditScore, BookingCreate
+from .db import init_db, get_connection, get_write_connection, get_read_connection, close_db, release_connection
+from .models import ApplicationCreate, ApplicationResponse, DecisionResponse, KYCResult, FraudResult, CreditScore, BookingCreate, DecisionPlan, DecisionPlanRequest
 from .idempotency import IdempotencyManager
+from .planning import create_plan, calculate_inputs_hash
+from .decision import execute_decision_workflow
 
-from workflows.loan_origination_wayflow import create_loan_workflow
 from workflows.wayflow import WorkflowContext
 
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +27,22 @@ app = FastAPI(lifespan=lifespan, title="Loan Origination API")
 
 # Dependencies
 def get_db_conn():
-    conn = get_connection()
+    # Default to write for backward compat
+    conn = get_write_connection()
+    try:
+        yield conn
+    finally:
+        release_connection(conn)
+
+def get_write_db_conn():
+    conn = get_write_connection()
+    try:
+        yield conn
+    finally:
+        release_connection(conn)
+
+def get_read_db_conn():
+    conn = get_read_connection()
     try:
         yield conn
     finally:
@@ -37,7 +53,6 @@ def get_idempotency_key(idempotency_key: str = Header(..., alias="Idempotency-Ke
 
 # Helpers
 def derive_id(key: str) -> str:
-    # Deterministic ID based on idempotency key
     return str(uuid.uuid5(uuid.NAMESPACE_OID, key))
 
 def log_audit(conn, app_id: str, action: str, details: Dict):
@@ -49,8 +64,6 @@ def log_audit(conn, app_id: str, action: str, details: Dict):
         )
     except Exception as e:
         logger.error(f"Failed to write audit log: {e}")
-        # We don't raise here to avoid blocking main flow if audit fails?
-        # "Full auditability" -> We should probably raise.
         raise e
     finally:
         cursor.close()
@@ -63,7 +76,6 @@ def fetch_application(conn, app_id: str) -> Dict:
     if not row:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    # Parse CLOBs
     app_data = json.loads(row[2].read()) if row[2] else {}
     dec_data = json.loads(row[3].read()) if row[3] else {}
     
@@ -98,6 +110,15 @@ def update_app_status(conn, app_id: str, status: str):
     conn.commit()
     cursor.close()
 
+def mark_plan_executed(conn, plan_id: str):
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE decision_plans SET status = 'EXECUTED', executed_at = CURRENT_TIMESTAMP WHERE plan_id = :1",
+        [plan_id]
+    )
+    conn.commit()
+    cursor.close()
+
 # Routes
 
 @app.post("/applications", response_model=ApplicationResponse)
@@ -105,7 +126,7 @@ def create_application(
     app_data: ApplicationCreate,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -142,7 +163,7 @@ def create_application(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/applications/{id}", response_model=ApplicationResponse)
-def get_application(id: str, conn = Depends(get_db_conn)):
+def get_application(id: str, conn = Depends(get_read_db_conn)):
     return fetch_application(conn, id)
 
 @app.post("/applications/{id}/kyc")
@@ -151,7 +172,7 @@ def add_kyc_result(
     result: KYCResult,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -161,7 +182,7 @@ def add_kyc_result(
     try:
         update_app_data(conn, id, "kyc_result", result.model_dump())
         log_audit(conn, id, "KYC_UPDATED", result.model_dump())
-        conn.commit() # Ensure log committed
+        conn.commit() 
         
         resp = {"status": "Updated", "kyc_result": result.model_dump()}
         idem.complete(idempotency_key, route, resp)
@@ -176,7 +197,7 @@ def add_fraud_result(
     result: FraudResult,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -201,7 +222,7 @@ def add_credit_score(
     result: CreditScore,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -220,80 +241,166 @@ def add_credit_score(
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/applications/{id}/decision/plan", response_model=DecisionPlan)
+def decision_plan_endpoint(
+    id: str,
+    plan_request: DecisionPlanRequest,
+    request: Request,
+    idempotency_key: str = Depends(get_idempotency_key),
+    conn = Depends(get_write_db_conn)
+):
+    idem = IdempotencyManager(conn)
+    route = request.url.path
+    
+    # We cache based on request payload (options)
+    cached = idem.check_and_lock(idempotency_key, route, plan_request.model_dump(), "POST", "PLAN")
+    if cached: return cached
+    
+    try:
+        app_data = fetch_application(conn, id)
+        plan = create_plan(conn, id, app_data, plan_request, idempotency_key)
+        
+        idem.complete(idempotency_key, route, plan.model_dump())
+        return plan
+    except Exception as e:
+        logger.error(f"Plan creation failed: {e}")
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/applications/{id}/decision/execute")
+def decision_execute_endpoint(
+    id: str,
+    decision_plan: DecisionPlan,
+    request: Request,
+    idempotency_key: str = Depends(get_idempotency_key),
+    conn = Depends(get_write_db_conn)
+):
+    idem = IdempotencyManager(conn)
+    route = request.url.path
+    
+    # Check idempotency first
+    # Payload for lock is the decision_plan (might be large, but ensures we execute specific plan)
+    cached = idem.check_and_lock(idempotency_key, route, decision_plan.model_dump(), "POST", "EXECUTE")
+    if cached: return cached
+    
+    try:
+        # Validate Inputs Hash
+        app_data = fetch_application(conn, id)
+        applicant = app_data["applicant_data"]
+        decision_data = app_data["decision_data"]
+        kyc = decision_data.get("kyc_result", {})
+        fraud = decision_data.get("fraud_result", {})
+        credit = decision_data.get("credit_score", 0)
+        
+        # Reconstruct options from plan to verify hash
+        # Assuming plan request used defaults if not visible, or derived from plan structure
+        options = {
+            "workspace_id": decision_plan.workspace_id,
+            "scenarios_count": len(decision_plan.scenario_results)
+        }
+        
+        current_hash = calculate_inputs_hash(
+            {"id": id, **applicant}, 
+            kyc, 
+            fraud, 
+            credit, 
+            options
+        )
+        
+        if current_hash != decision_plan.inputs_hash:
+            raise HTTPException(status_code=409, detail="Application state has changed since plan was created. Inputs hash mismatch.")
+            
+        # Execute Decision
+        # We reuse the deterministic logic. It should yield the same result as recommended_decision if state is same.
+        inputs = {
+            "application": {"id": id, **applicant},
+            "kyc_result": kyc,
+            "fraud_result": fraud,
+            "credit_score": credit,
+            "db_conn": conn
+        }
+        
+        result = execute_decision_workflow(inputs, "EXECUTE", derive_id(idempotency_key))
+        
+        # Verify result matches plan? Not strictly required but good practice.
+        if result["decision"] != decision_plan.recommended_decision:
+             logger.warning(f"Execution result {result['decision']} differs from plan {decision_plan.recommended_decision}")
+        
+        # Persist
+        log_audit(conn, id, "DECISION_EXECUTED", {"run_id": result["run_id"], "decision": result["decision"], "plan_id": decision_plan.plan_id})
+        
+        # Mark Plan Executed
+        mark_plan_executed(conn, decision_plan.plan_id)
+        
+        conn.commit()
+        
+        response = {
+            "run_id": result["run_id"],
+            "decision": result["decision"],
+            "reason_codes": result["reason_codes"],
+            "pricing": result["pricing"],
+            "mode": "EXECUTE"
+        }
+        
+        idem.complete(idempotency_key, route, response)
+        return response
+        
+    except HTTPException as he:
+        conn.rollback()
+        raise he
+    except Exception as e:
+        logger.error(f"Execution failed: {e}")
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/applications/{id}/decision/dry-run")
 def decision_dry_run(
     id: str,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
-    return run_decision(id, request, idempotency_key, conn, mode="DRY_RUN")
+    # POST endpoints use primary (write) connection per requirements,
+    # ensuring IdempotencyManager can write locks even if business logic is read-only.
+    return run_decision_legacy(id, request, idempotency_key, conn, mode="DRY_RUN")
 
-@app.post("/applications/{id}/decision/execute")
-def decision_execute(
-    id: str,
-    request: Request,
-    idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
-):
-    return run_decision(id, request, idempotency_key, conn, mode="EXECUTE")
-
-def run_decision(app_id: str, request: Request, idempotency_key: str, conn, mode: str):
+def run_decision_legacy(app_id: str, request: Request, idempotency_key: str, conn, mode: str):
+    # This is the old helper, now wrapping new logic for backward compat
     idem = IdempotencyManager(conn)
     route = request.url.path
-    body_dict = {} 
     
-    cached = idem.check_and_lock(idempotency_key, route, body_dict, "POST", mode)
+    cached = idem.check_and_lock(idempotency_key, route, {}, "POST", mode)
     if cached: return cached
     
     try:
-        # Fetch Data
         app_data = fetch_application(conn, app_id)
         applicant = app_data["applicant_data"]
         decision_data = app_data["decision_data"]
         
-        # Construct Inputs
         inputs = {
             "application": {"id": app_id, **applicant},
             "kyc_result": decision_data.get("kyc_result", {}),
             "fraud_result": decision_data.get("fraud_result", {}),
-            "credit_score": decision_data.get("credit_score", 0)
+            "credit_score": decision_data.get("credit_score", 0),
+            "db_conn": conn
         }
         
-        # Prepare Workflow
-        wf = create_loan_workflow()
-        
-        # Run ID
-        run_id = f"run_{derive_id(idempotency_key)}"
-        
-        ctx = WorkflowContext(
-            run_id=run_id,
-            mode=mode,
-            payload={**inputs, "db_conn": conn},
-            state={}
-        )
-        
-        result = wf.run(ctx)
-        
-        agent_res = result["results"].get("agent_decision", {})
+        result = execute_decision_workflow(inputs, mode, derive_id(idempotency_key))
         
         response = {
-            "run_id": run_id,
-            "decision": agent_res.get("decision", "UNKNOWN"),
-            "reason_codes": agent_res.get("reason_codes", []),
-            "pricing": agent_res.get("pricing"),
+            "run_id": result["run_id"],
+            "decision": result["decision"],
+            "reason_codes": result["reason_codes"],
+            "pricing": result["pricing"],
             "mode": mode
         }
         
-        if mode == "EXECUTE":
-            log_audit(conn, app_id, "DECISION_EXECUTED", {"run_id": run_id, "decision": response["decision"]})
-            conn.commit()
+        # Note: Execute persistence moved to endpoint logic, but dry run legacy might need it?
+        # No, dry run doesn't persist.
         
         idem.complete(idempotency_key, route, response)
         return response
-        
     except Exception as e:
-        logger.error(f"Decision failed: {e}")
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -302,7 +409,7 @@ def accept_offer(
     id: str,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -313,8 +420,6 @@ def accept_offer(
     try:
         # Verify app exists
         app_data = fetch_application(conn, id)
-        # Verify status? Maybe only allow if status is 'DECISION_MADE' or similar?
-        # For sample, we assume if we have a decision, we can accept.
         
         update_app_status(conn, id, "OFFER_ACCEPTED")
         log_audit(conn, id, "OFFER_ACCEPTED", {"timestamp": str(datetime.datetime.now())})
@@ -332,7 +437,7 @@ def create_booking(
     booking_data: BookingCreate,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
-    conn = Depends(get_db_conn)
+    conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -362,7 +467,7 @@ def create_booking(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/applications/{id}/audit")
-def get_audit(id: str, conn = Depends(get_db_conn)):
+def get_audit(id: str, conn = Depends(get_read_db_conn)):
     cursor = conn.cursor()
     cursor.execute("SELECT id, action, details, created_at FROM audit_logs WHERE application_id = :1 ORDER BY created_at", [id])
     rows = cursor.fetchall()

@@ -52,6 +52,24 @@ $SQLPLUS_CONNECT
 @/opt/oracle/scripts/setup/02_seed.sql
 exit;
 SQL
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+@/opt/oracle/scripts/setup/03_plans.sql
+exit;
+SQL
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+@/opt/oracle/scripts/setup/04_ai_setup.sql
+exit;
+SQL
+        $CONTAINER_ENGINE exec -i infra-db-1 bash -lc "$SQLPLUS_ENV sqlplus -s /nolog" <<SQL
+whenever sqlerror exit 1;
+$SQLPLUS_CONNECT
+@/opt/oracle/scripts/setup/05_synthetic_data.sql
+exit;
+SQL
     fi
 fi
 
@@ -83,7 +101,7 @@ post_json() {
     status=$(echo "$response" | tail -n 1)
     body=$(echo "$response" | sed '$d')
     if [ "$status" != "200" ] && [ "$status" != "201" ]; then
-        echo "Request failed (HTTP $status). Retrying once..."
+        echo "Request failed (HTTP $status). Retrying once..." >&2
         sleep 3
         response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
             -H "Idempotency-Key: $idem_key" \
@@ -106,7 +124,7 @@ post_json_no_body() {
     status=$(echo "$response" | tail -n 1)
     body=$(echo "$response" | sed '$d')
     if [ "$status" != "200" ] && [ "$status" != "201" ] && [ "$status" != "409" ]; then
-        echo "Request failed (HTTP $status). Retrying once..."
+        echo "Request failed (HTTP $status). Retrying once..." >&2
         sleep 3
         response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
             -H "Idempotency-Key: $idem_key" \
@@ -158,16 +176,27 @@ echo -e "\n--- 3. Decision Dry-Run ---"
 echo "Calling Agent in Dry-Run mode. No side effects should persist."
 post_json_no_body "$API_URL/applications/$APP_ID/decision/dry-run" "dry-run-$APP_ID" | jq .
 
+# 3b. Generate Plan
+echo -e "\n--- 3b. Generate Decision Plan ---"
+echo "Calling Planner (AI + Synthetic Scenarios)."
+PLAN_KEY="plan-$APP_ID"
+PLAN_PAYLOAD='{"workspace_id": "demo_ws", "scenarios_count": 3}'
+
+PLAN_RESPONSE=$(post_json "$API_URL/applications/$APP_ID/decision/plan" "$PLAN_PAYLOAD" "$PLAN_KEY")
+echo "$PLAN_RESPONSE" | jq .
+
+DECISION_PLAN=$(echo "$PLAN_RESPONSE" | jq -c .)
+
 # 4. Execute Decision
 echo -e "\n--- 4. Decision Execute ---"
-echo "Calling Agent in Execute mode."
+echo "Executing the approved plan."
 EXEC_KEY="exec-$APP_ID"
-post_json_no_body "$API_URL/applications/$APP_ID/decision/execute" "$EXEC_KEY" | jq .
+post_json "$API_URL/applications/$APP_ID/decision/execute" "$DECISION_PLAN" "$EXEC_KEY" | jq .
 
 # 5. Idempotency Verification
 echo -e "\n--- 5. Idempotency Check ---"
 echo "Replaying Execute request with same key. Should return cached response."
-post_json_no_body "$API_URL/applications/$APP_ID/decision/execute" "$EXEC_KEY" | jq .
+post_json "$API_URL/applications/$APP_ID/decision/execute" "$DECISION_PLAN" "$EXEC_KEY" | jq .
 
 # 6. Idempotency Conflict Check
 echo -e "\n--- 6. Idempotency Conflict Check ---"

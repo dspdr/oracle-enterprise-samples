@@ -1,0 +1,42 @@
+sequenceDiagram
+    participant Client
+    participant API
+    participant DB
+    participant AI
+
+    Client->>API: POST /applications
+    API->>DB: Persist Application
+    API-->>Client: Application Created
+
+    Client->>API: POST /applications/{id}/kyc
+    API->>DB: Persist KYC Result
+    Client->>API: POST /applications/{id}/fraud
+    API->>DB: Persist Fraud Result
+    Client->>API: POST /applications/{id}/credit-score
+    API->>DB: Persist Credit Score
+
+    Client->>API: POST /applications/{id}/decision/dry-run
+    API->>DB: Fetch Application Snapshot
+    API->>API: Run Deterministic Decision (No Side Effects)
+    API-->>Client: Dry-Run Decision
+
+    Client->>API: POST /applications/{id}/decision/plan
+    API->>DB: Fetch Application Snapshot
+    API->>AI: Generate Synthetic Scenarios (via DB)
+    AI-->>API: Scenarios List
+    loop For Each Scenario
+        API->>API: Run Deterministic Decision
+    end
+    API->>AI: Generate Commentary
+    API->>DB: Persist Plan
+    API-->>Client: Decision Plan
+
+    Client->>API: POST /applications/{id}/decision/execute (Plan)
+    API->>DB: Validate Inputs Hash
+    alt Hash Match
+        API->>API: Execute Decision (Idempotent)
+        API->>DB: Write Offers & Audit
+        API-->>Client: Success
+    else Mismatch
+        API-->>Client: 409 Conflict
+    end

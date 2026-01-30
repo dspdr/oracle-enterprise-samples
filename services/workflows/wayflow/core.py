@@ -12,7 +12,7 @@ class WorkflowContext:
     state: Dict[str, Any] = field(default_factory=dict)
     
     def is_dry_run(self) -> bool:
-        return self.mode == "DRY_RUN"
+        return self.mode in ["DRY_RUN", "PLAN"]
 
 class Step:
     def __init__(self, name: str, func: Callable[['WorkflowContext'], Any]):

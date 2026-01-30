@@ -1,0 +1,12 @@
+{
+  "plan_id": "REPLACE_WITH_REAL_PLAN_ID",
+  "application_id": "REPLACE_WITH_APP_ID",
+  "workspace_id": "demo_workspace",
+  "run_id": "run_example",
+  "inputs_hash": "hash_example",
+  "status": "CREATED",
+  "recommended_decision": "APPROVE",
+  "reason_codes": [],
+  "scenario_results": [],
+  "execute_preview": ["applications", "audit_logs"]
+}

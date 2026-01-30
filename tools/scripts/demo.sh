@@ -20,11 +20,11 @@ if $CONTAINER_ENGINE ps --format '{{.Names}}' | grep -q '^infra-db-1$'; then
     if [ "$USE_WALLET" = "yes" ]; then
         DB_ADMIN_USER="${DB_ADMIN_USER:-admin}"
         DB_ADMIN_PASSWORD="${DB_ADMIN_PASSWORD:-Welcome12345!}"
-        DB_TNS="${DB_TNS:-myatp_low}"
+        DB_TNS="${DB_ADMIN_TNS:-myatp_low}"
         SQLPLUS_ENV="TNS_ADMIN=$WALLET_DIR"
         SQLPLUS_CONNECT="connect ${DB_ADMIN_USER}/\"${DB_ADMIN_PASSWORD}\"@${DB_TNS};"
     else
-        DB_SID=$($CONTAINER_ENGINE exec -i infra-db-1 bash -lc "ps -ef | awk '/ora_pmon_/ {sub(/.*ora_pmon_/,\"\",$8); print $8; exit}'" 2>/dev/null | tr -d '\r')
+        DB_SID=$($CONTAINER_ENGINE exec -i infra-db-1 bash -lc "ps -ef | awk '/pmon_/ {sub(/.*pmon_/,\"\",\\$8); print \\$8; exit}'" 2>/dev/null | tr -d '\r')
         if [ -z "$DB_SID" ]; then
             DB_SID="POD1"
         fi
@@ -70,6 +70,53 @@ while ! curl -s "$API_URL/docs" > /dev/null; do
 done
 echo " Ready."
 
+# Basic POST helper with one retry for transient DB readiness
+post_json() {
+    local url="$1"
+    local payload="$2"
+    local idem_key="$3"
+    local response status
+    response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
+        -H "Idempotency-Key: $idem_key" \
+        -H "Content-Type: application/json" \
+        -d "$payload")
+    status=$(echo "$response" | tail -n 1)
+    body=$(echo "$response" | sed '$d')
+    if [ "$status" != "200" ] && [ "$status" != "201" ]; then
+        echo "Request failed (HTTP $status). Retrying once..."
+        sleep 3
+        response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
+            -H "Idempotency-Key: $idem_key" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+        status=$(echo "$response" | tail -n 1)
+        body=$(echo "$response" | sed '$d')
+    fi
+    echo "$body"
+    return 0
+}
+
+post_json_no_body() {
+    local url="$1"
+    local idem_key="$2"
+    local response status body
+    response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
+        -H "Idempotency-Key: $idem_key" \
+        -H "Content-Length: 0")
+    status=$(echo "$response" | tail -n 1)
+    body=$(echo "$response" | sed '$d')
+    if [ "$status" != "200" ] && [ "$status" != "201" ] && [ "$status" != "409" ]; then
+        echo "Request failed (HTTP $status). Retrying once..."
+        sleep 3
+        response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
+            -H "Idempotency-Key: $idem_key" \
+            -H "Content-Length: 0")
+        body=$(echo "$response" | sed '$d')
+    fi
+    echo "$body"
+    return 0
+}
+
 # 1. Create Application
 echo -e "\n--- 1. Create Application ---"
 IDEM_KEY="create-$(date +%s)"
@@ -82,10 +129,7 @@ PAYLOAD='{
     "email": "jane@example.com"
 }'
 
-RESPONSE=$(curl -s -X POST "$API_URL/applications" \
-  -H "Idempotency-Key: $IDEM_KEY" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD")
+RESPONSE=$(post_json "$API_URL/applications" "$PAYLOAD" "$IDEM_KEY")
 
 echo "$RESPONSE" | jq .
 APP_ID=$(echo "$RESPONSE" | jq -r '.id')
@@ -101,44 +145,29 @@ echo "Created Application ID: $APP_ID"
 echo -e "\n--- 2. Add Check Results ---"
 
 echo "Adding KYC Result (PASS)..."
-curl -s -X POST "$API_URL/applications/$APP_ID/kyc" \
-  -H "Idempotency-Key: kyc-$APP_ID" \
-  -H "Content-Type: application/json" \
-  -d '{"status": "PASS"}' | jq .
+post_json "$API_URL/applications/$APP_ID/kyc" '{"status": "PASS"}' "kyc-$APP_ID" | jq .
 
 echo "Adding Fraud Result (Risk: 10)..."
-curl -s -X POST "$API_URL/applications/$APP_ID/fraud" \
-  -H "Idempotency-Key: fraud-$APP_ID" \
-  -H "Content-Type: application/json" \
-  -d '{"risk_score": 10}' | jq .
+post_json "$API_URL/applications/$APP_ID/fraud" '{"risk_score": 10}' "fraud-$APP_ID" | jq .
 
 echo "Adding Credit Score (750)..."
-curl -s -X POST "$API_URL/applications/$APP_ID/credit-score" \
-  -H "Idempotency-Key: credit-$APP_ID" \
-  -H "Content-Type: application/json" \
-  -d '{"score": 750}' | jq .
+post_json "$API_URL/applications/$APP_ID/credit-score" '{"score": 750}' "credit-$APP_ID" | jq .
 
 # 3. Dry Run Decision
 echo -e "\n--- 3. Decision Dry-Run ---"
 echo "Calling Agent in Dry-Run mode. No side effects should persist."
-curl -s -X POST "$API_URL/applications/$APP_ID/decision/dry-run" \
-  -H "Idempotency-Key: dry-run-$APP_ID" \
-  -H "Content-Length: 0" | jq .
+post_json_no_body "$API_URL/applications/$APP_ID/decision/dry-run" "dry-run-$APP_ID" | jq .
 
 # 4. Execute Decision
 echo -e "\n--- 4. Decision Execute ---"
 echo "Calling Agent in Execute mode."
 EXEC_KEY="exec-$APP_ID"
-curl -s -X POST "$API_URL/applications/$APP_ID/decision/execute" \
-  -H "Idempotency-Key: $EXEC_KEY" \
-  -H "Content-Length: 0" | jq .
+post_json_no_body "$API_URL/applications/$APP_ID/decision/execute" "$EXEC_KEY" | jq .
 
 # 5. Idempotency Verification
 echo -e "\n--- 5. Idempotency Check ---"
 echo "Replaying Execute request with same key. Should return cached response."
-curl -s -X POST "$API_URL/applications/$APP_ID/decision/execute" \
-  -H "Idempotency-Key: $EXEC_KEY" \
-  -H "Content-Length: 0" | jq .
+post_json_no_body "$API_URL/applications/$APP_ID/decision/execute" "$EXEC_KEY" | jq .
 
 # 6. Idempotency Conflict Check
 echo -e "\n--- 6. Idempotency Conflict Check ---"

@@ -35,18 +35,12 @@ if [ -z "$ARCH_RAW" ]; then
 fi
 
 case "$ARCH_RAW" in
-    arm64|aarch64)
+    arm64|aarch64|amd64|x86_64|*)
         export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}"
-        export DB_SERVICE="${DB_SERVICE:-myatp_low}"
-        export DB_DSN="${DB_DSN:-myatp_low}"
-        export DB_TNS_ADMIN="${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}"
-        ;;
-    amd64|x86_64)
-        export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/free:latest}"
-        ;;
-    *)
-        export DB_IMAGE="${DB_IMAGE:-container-registry.oracle.com/database/free:latest}"
         ;;
 esac
 
-export DB_SERVICE="${DB_SERVICE:-FREEPDB1}"
+export DB_SERVICE="${DB_SERVICE:-myatp_low.adb.oraclecloud.com}"
+export DB_DSN="${DB_DSN:-myatp_low_tls}"
+export DB_TNS_ADMIN="${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}"
+export DB_ADMIN_TNS="${DB_ADMIN_TNS:-myatp_low}"

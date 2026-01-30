@@ -1,6 +1,6 @@
 services:
   db:
-    image: ${DB_IMAGE:-container-registry.oracle.com/database/free:latest}
+    image: ${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}
     ports:
       - "1521:1521"
     environment:
@@ -27,14 +27,24 @@ services:
       dockerfile: services/loan_api/Containerfile
     ports:
       - "8000:8000"
+    restart: unless-stopped
+    command:
+      [
+        "sh",
+        "-lc",
+        "while [ ! -f /u01/app/oracle/wallets/tls_wallet/tnsnames.ora ] || ! grep -qi '^myatp_low' /u01/app/oracle/wallets/tls_wallet/tnsnames.ora; do echo 'Waiting for wallet tnsnames...'; sleep 2; done; exec uvicorn loan_api.main:app --host 0.0.0.0 --port 8000"
+      ]
     environment:
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
-      - DB_DSN=${DB_DSN:-db:1521/${DB_SERVICE:-FREEPDB1}}
-      - TNS_ADMIN=${DB_TNS_ADMIN:-}
+      - DB_DSN=${DB_DSN:-myatp_low_tls}
+      - DB_PROTOCOL=tcps
+      - TNS_ADMIN=${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}
+      - DB_WALLET_LOCATION=${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}
+      - WALLET_PASSWORD=Welcome12345!
       - DB_HOST=db
-      - DB_PORT=1521
-      - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
+      - DB_PORT=1522
+      - DB_SERVICE=${DB_SERVICE:-myatp_low.adb.oraclecloud.com}
     volumes:
       - adb_wallets:/u01/app/oracle/wallets:ro
     depends_on:
@@ -50,7 +60,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=1521
-      - DB_SERVICE=${DB_SERVICE:-FREEPDB1}
+      - DB_SERVICE=${DB_SERVICE:-myatp_low_tls}
       - DB_USER=loan_user
       - DB_PASSWORD=Welcome12345!
 

@@ -47,7 +47,7 @@ flowchart TB
   A[Create Application] --> K[Collect KYC Result]
   K --> F[Collect Fraud Result]
   F --> C[Collect Credit Score]
-  C --> DR[Dry-Run Decision (Optional)]
+  C --> DR[Dry-Run Decision Optional]
   DR --> P[Planning]
   P --> AI[Oracle AI / Synthetic Data]
   AI --> P

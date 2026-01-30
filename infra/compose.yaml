@@ -2,7 +2,8 @@ services:
   db:
     image: ${DB_IMAGE:-container-registry.oracle.com/database/adb-free:latest-23ai}
     ports:
-      - "1521:1521"
+      - "11521:1521"
+      - "11522:1522"
     environment:
       - ORACLE_PWD=Welcome12345!
       - ADMIN_PASSWORD=Welcome12345!
@@ -26,7 +27,7 @@ services:
       context: ..
       dockerfile: services/loan_api/Containerfile
     ports:
-      - "8000:8000"
+      - "18000:8000"
     restart: unless-stopped
     command:
       [

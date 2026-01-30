@@ -30,7 +30,7 @@ This sample demonstrates an enterprise-grade loan origination process using Orac
 
 * Override API URL:
   ```bash
-  API_URL=http://localhost:8001 ./demo.sh
+  API_URL=http://localhost:18000 ./demo.sh
   ```
 * Override DB image/service:
   ```bash

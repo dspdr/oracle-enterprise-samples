@@ -20,7 +20,7 @@ else
     exit 1
 fi
 
-export API_URL="${API_URL:-http://localhost:8000}"
+export API_URL="${API_URL:-http://localhost:18000}"
 export PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd)
 
 # Select DB image based on engine architecture (adb-free supports arm64; database/free is amd64-only)

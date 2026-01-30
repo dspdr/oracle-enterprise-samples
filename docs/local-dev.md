@@ -38,8 +38,8 @@
 
 ## Ports
 
-* Loan API: `http://localhost:8000`
-* Oracle DB: `localhost:1521`
+* Loan API: `http://localhost:18000`
+* Oracle DB: `localhost:11521`
 
 ## Using Podman Instead of Docker
 

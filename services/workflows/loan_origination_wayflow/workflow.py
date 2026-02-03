@@ -38,6 +38,19 @@ def step_initialize(ctx: WorkflowContext):
     return {"status": "Initialized"}
 
 def step_decision_agent(ctx: WorkflowContext):
+    # Mock Mode Check
+    if ctx.payload.get("mock_agent"):
+        logger.info("Using MOCK AGENT for decision.")
+        return {
+            "decision": "APPROVE",
+            "reason_codes": ["MOCK_APPROVAL", "GOOD_CREDIT_MOCK"],
+            "pricing": {
+                "rate": 5.5,
+                "term": 36,
+                "monthly_payment": 1500.00
+            }
+        }
+
     # Setup Runner
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__))) # services/
     spec_path = os.path.join(base_dir, "decision_agent/agent_spec/manifest.yaml")

@@ -101,12 +101,14 @@ def create_plan(conn, app_id: str, app_data: Dict, request: DecisionPlanRequest,
     kyc = decision_data.get("kyc_result", {})
     fraud = decision_data.get("fraud_result", {})
     credit = decision_data.get("credit_score", 0)
+    mock_agent = decision_data.get("mock_agent", False)
     
     inputs = {
         "application": {"id": app_id, **applicant},
         "kyc_result": kyc,
         "fraud_result": fraud,
-        "credit_score": credit
+        "credit_score": credit,
+        "mock_agent": mock_agent
     }
     
     # Resolve workspace ID first

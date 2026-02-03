@@ -10,14 +10,14 @@ if command -v podman &> /dev/null; then
         export COMPOSE_CMD="docker compose"
     else
         echo "Error: Podman is installed but not running; Docker not found."
-        exit 1
+        return 1
     fi
 elif command -v docker &> /dev/null; then
     export CONTAINER_ENGINE=docker
     export COMPOSE_CMD="docker compose"
 else
     echo "Error: No container engine (podman/docker) found."
-    exit 1
+    return 1
 fi
 
 export API_URL="${API_URL:-http://localhost:18000}"
@@ -40,7 +40,7 @@ case "$ARCH_RAW" in
         ;;
 esac
 
-export DB_SERVICE="${DB_SERVICE:-myatp_low.adb.oraclecloud.com}"
-export DB_DSN="${DB_DSN:-myatp_low_tls}"
+export DB_SERVICE="${DB_SERVICE:-my_atp_low.adb.oraclecloud.com}"
+export DB_DSN="${DB_DSN:-my_atp_low_tls}"
 export DB_TNS_ADMIN="${DB_TNS_ADMIN:-/u01/app/oracle/wallets/tls_wallet}"
-export DB_ADMIN_TNS="${DB_ADMIN_TNS:-myatp_low}"
+export DB_ADMIN_TNS="${DB_ADMIN_TNS:-my_atp_low_tls}"

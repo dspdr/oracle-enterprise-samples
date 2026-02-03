@@ -247,17 +247,24 @@ def decision_plan_endpoint(
     plan_request: DecisionPlanRequest,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
+    x_mock_agent: Optional[bool] = Header(None, alias="X-Mock-Agent"),
     conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
     route = request.url.path
     
     # We cache based on request payload (options)
+    # Include mock flag in cache key if relevant? Prob safer to not cache across modes, 
+    # but for simplicity we rely on idempotency key uniqueness or just let it cache.
+    # If we are mocking, the plan might look different.
     cached = idem.check_and_lock(idempotency_key, route, plan_request.model_dump(), "POST", "PLAN")
     if cached: return cached
     
     try:
         app_data = fetch_application(conn, id)
+        # Inject mock flag
+        app_data["decision_data"]["mock_agent"] = x_mock_agent
+        
         plan = create_plan(conn, id, app_data, plan_request, idempotency_key)
         
         idem.complete(idempotency_key, route, plan.model_dump())
@@ -273,6 +280,7 @@ def decision_execute_endpoint(
     decision_plan: DecisionPlan,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
+    x_mock_agent: Optional[bool] = Header(None, alias="X-Mock-Agent"),
     conn = Depends(get_write_db_conn)
 ):
     idem = IdempotencyManager(conn)
@@ -317,7 +325,8 @@ def decision_execute_endpoint(
             "kyc_result": kyc,
             "fraud_result": fraud,
             "credit_score": credit,
-            "db_conn": conn
+            "db_conn": conn,
+            "mock_agent": x_mock_agent
         }
         
         result = execute_decision_workflow(inputs, "EXECUTE", derive_id(idempotency_key))
@@ -358,13 +367,14 @@ def decision_dry_run(
     id: str,
     request: Request,
     idempotency_key: str = Depends(get_idempotency_key),
+    x_mock_agent: Optional[bool] = Header(None, alias="X-Mock-Agent"),
     conn = Depends(get_write_db_conn)
 ):
     # POST endpoints use primary (write) connection per requirements,
     # ensuring IdempotencyManager can write locks even if business logic is read-only.
-    return run_decision_legacy(id, request, idempotency_key, conn, mode="DRY_RUN")
+    return run_decision_legacy(id, request, idempotency_key, conn, mode="DRY_RUN", mock_agent=x_mock_agent)
 
-def run_decision_legacy(app_id: str, request: Request, idempotency_key: str, conn, mode: str):
+def run_decision_legacy(app_id: str, request: Request, idempotency_key: str, conn, mode: str, mock_agent: bool = False):
     # This is the old helper, now wrapping new logic for backward compat
     idem = IdempotencyManager(conn)
     route = request.url.path
@@ -382,7 +392,8 @@ def run_decision_legacy(app_id: str, request: Request, idempotency_key: str, con
             "kyc_result": decision_data.get("kyc_result", {}),
             "fraud_result": decision_data.get("fraud_result", {}),
             "credit_score": decision_data.get("credit_score", 0),
-            "db_conn": conn
+            "db_conn": conn,
+            "mock_agent": mock_agent
         }
         
         result = execute_decision_workflow(inputs, mode, derive_id(idempotency_key))

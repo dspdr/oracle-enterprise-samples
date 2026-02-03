@@ -14,6 +14,12 @@ echo "Container Engine: $CONTAINER_ENGINE"
 echo "API URL: $API_URL"
 
 # Ensure DB schema is initialized (best-effort)
+MOCK_AGENT_HEADER=""
+if ! $CONTAINER_ENGINE ps --format '{{.Names}}' | grep -q 'agent-factory'; then
+    echo "Notice: Agent Factory not running. Enabling Mock Agent mode."
+    MOCK_AGENT_HEADER='-H "X-Mock-Agent: true"'
+fi
+
 if $CONTAINER_ENGINE ps --format '{{.Names}}' | grep -q '^infra-db-1$'; then
     WALLET_DIR="/u01/app/oracle/wallets/tls_wallet"
     USE_WALLET=$($CONTAINER_ENGINE exec -i infra-db-1 bash -lc "[ -f $WALLET_DIR/tnsnames.ora ] && echo yes || true" 2>/dev/null | tr -d '\r')
@@ -97,6 +103,7 @@ post_json() {
     response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
         -H "Idempotency-Key: $idem_key" \
         -H "Content-Type: application/json" \
+        $MOCK_AGENT_HEADER \
         -d "$payload")
     status=$(echo "$response" | tail -n 1)
     body=$(echo "$response" | sed '$d')
@@ -106,6 +113,7 @@ post_json() {
         response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
             -H "Idempotency-Key: $idem_key" \
             -H "Content-Type: application/json" \
+            $MOCK_AGENT_HEADER \
             -d "$payload")
         status=$(echo "$response" | tail -n 1)
         body=$(echo "$response" | sed '$d')
@@ -120,6 +128,7 @@ post_json_no_body() {
     local response status body
     response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
         -H "Idempotency-Key: $idem_key" \
+        $MOCK_AGENT_HEADER \
         -H "Content-Length: 0")
     status=$(echo "$response" | tail -n 1)
     body=$(echo "$response" | sed '$d')
@@ -128,6 +137,7 @@ post_json_no_body() {
         sleep 3
         response=$(curl -s -w "\n%{http_code}" -X POST "$url" \
             -H "Idempotency-Key: $idem_key" \
+            $MOCK_AGENT_HEADER \
             -H "Content-Length: 0")
         body=$(echo "$response" | sed '$d')
     fi
@@ -206,6 +216,7 @@ echo "Replaying Execute request with DIFFERENT payload/mode (simulated by differ
 echo "Trying to reuse key for Dry-Run:"
 curl -s -v -X POST "$API_URL/applications/$APP_ID/decision/dry-run" \
   -H "Idempotency-Key: $EXEC_KEY" \
+  $MOCK_AGENT_HEADER \
   -H "Content-Length: 0" 2>&1 | grep "HTTP"
 
 echo -e "\nDemo Completed Successfully."

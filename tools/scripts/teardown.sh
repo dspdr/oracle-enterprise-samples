@@ -2,7 +2,10 @@
 # teardown.sh - Full teardown of the environment
 
 set -e
-source "$(dirname "$0")/env.sh"
+if ! source "$(dirname "$0")/env.sh"; then
+    echo "Warning: No container engine detected or environment issue. Skipping container teardown."
+    exit 0
+fi
 
 echo "Tearing down environment..."
 cd "$PROJECT_ROOT/infra"

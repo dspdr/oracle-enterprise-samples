@@ -25,6 +25,89 @@ samples/shared-context/
     export.sql
   diagrams/
     architecture.mmd
+    entity.mmd
+```
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  Agent[Frontier Agent]
+  APEX[APEX Shared Context Console]
+  ORDS[ORDS Shared Context Module /context/*]
+  DB[(Oracle Database 23ai)]
+  Rel[(Relational Tables)]
+  Vec[(Vector Evidence)]
+  Cache[(Optional Oracle True Cache)]
+
+  Agent -->|GET/POST JSON| ORDS
+  APEX -->|SQL Views + API Parity| ORDS
+  APEX -->|Interactive Reports| DB
+  ORDS -->|SQL + JSON_OBJECT| DB
+  DB --> Rel
+  DB --> Vec
+  ORDS -. optional read-through .-> Cache
+  Cache -. cache miss .-> DB
+```
+
+## Entity Diagram
+
+```mermaid
+erDiagram
+  CASES {
+    VARCHAR2 case_id PK
+    VARCHAR2 workspace_id
+    VARCHAR2 status
+    VARCHAR2 region
+    VARCHAR2 study_id
+    TIMESTAMP created_at
+    TIMESTAMP updated_at
+  }
+  EXPERIMENTS {
+    VARCHAR2 experiment_id PK
+    VARCHAR2 case_id FK
+    VARCHAR2 type
+    VARCHAR2 status
+    TIMESTAMP started_at
+  }
+  SAMPLES {
+    VARCHAR2 sample_id PK
+    VARCHAR2 experiment_id FK
+    VARCHAR2 patient_id
+    VARCHAR2 status
+    TIMESTAMP collected_at
+  }
+  REPORTS {
+    VARCHAR2 report_id PK
+    VARCHAR2 case_id FK
+    VARCHAR2 title
+    CLOB body
+    TIMESTAMP created_at
+  }
+  AUDIT_EVENTS {
+    NUMBER event_id PK
+    VARCHAR2 case_id FK
+    VARCHAR2 actor
+    VARCHAR2 action
+    VARCHAR2 policy_version
+    TIMESTAMP created_at
+    CLOB details_json
+  }
+  EVIDENCE_CHUNKS {
+    VARCHAR2 chunk_id PK
+    VARCHAR2 report_id FK
+    VARCHAR2 case_id FK
+    CLOB chunk_text
+    VECTOR embedding
+    TIMESTAMP created_at
+  }
+
+  CASES ||--o{ EXPERIMENTS : case_id
+  EXPERIMENTS ||--o{ SAMPLES : experiment_id
+  CASES ||--o{ REPORTS : case_id
+  CASES ||--o{ AUDIT_EVENTS : case_id
+  CASES ||--o{ EVIDENCE_CHUNKS : case_id
+  REPORTS ||--o{ EVIDENCE_CHUNKS : report_id
 ```
 
 ## Prerequisites
@@ -144,4 +227,3 @@ curl -s "http://localhost:8080/ords/shared-context/context/health" | jq
 curl -s "http://localhost:8080/ords/shared-context/context/cases/CASE-0001?workspaceId=WS1" | jq
 curl -s "http://localhost:8080/ords/shared-context/context/cases/CASE-0001/evidence?workspaceId=WS1&query=biomarker&limit=5" | jq
 ```
-

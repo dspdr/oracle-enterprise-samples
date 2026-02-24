@@ -1,0 +1,11 @@
+-- APEX export placeholder for "Shared Context Console"
+--
+-- In this workspace, a runnable APEX export cannot be generated because no live
+-- APEX instance/session is attached to execute APEXExport.
+--
+-- Use the step-by-step instructions in build_guide.md to create the app.
+-- After creating it in your environment, export with:
+--
+--   apex export -applicationid <APP_ID> -split
+--
+-- and replace this file with the generated export.sql.

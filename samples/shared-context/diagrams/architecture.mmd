@@ -1,0 +1,17 @@
+flowchart LR
+  Agent[Frontier Agent]\n(Read-Only Tool Calls)
+  APEX[APEX Shared Context Console]\n(Human Validation UI)
+  ORDS[ORDS Shared Context Module]\n(/context/*)
+  DB[(Oracle Database 23ai)]
+  Rel[(Relational Tables\nCases/Experiments/Samples/Reports/Audit)]
+  Vec[(Vector Evidence\nEvidence Chunks + Embeddings)]
+  Cache[(Optional Oracle True Cache)]
+
+  Agent -->|GET/POST JSON| ORDS
+  APEX -->|SQL Views + API Parity| ORDS
+  APEX -->|Interactive Reports| DB
+  ORDS -->|SQL + JSON_OBJECT| DB
+  DB --> Rel
+  DB --> Vec
+  ORDS -. optional read-through .-> Cache
+  Cache -. cache miss .-> DB
